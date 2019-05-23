@@ -64,7 +64,7 @@ public:
         end_work++;
         if (end_work == to_end) {
             queue.push(poison_pill);
-        };
+        }
     }
 
 //    bool should_i_wait() {

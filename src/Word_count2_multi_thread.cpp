@@ -74,28 +74,24 @@ void worker_processor(tsq_string & strings, tsq_map & queue_res) {
     queue_res.end_of_data();
 };
 
-void worker_merger(tsq_map & queue_maps) {
-//    std::map<std::string, int> res;
+void worker_merger(tsq_map & queue_maps, tsq_map & res_merging) {
+    std::map<std::string, int> res;
+
     for (;;) {
-        std::pair<sp_map, sp_map> elem;
-        queue_maps.wait_and_pop_two(elem);
-        if (elem.first == poison_map or elem.second == poison_map) {
+        sp_map elem_ptr;
+        queue_maps.wait_and_pop(elem_ptr);
 
-            if (queue_maps.size()==0) {
-                queue_maps.push(elem.first);
-                queue_maps.push(elem.second);
-                break;
-            } else {
-                queue_maps.push(elem.first);
-                queue_maps.push(elem.second);
-            }
+        if (elem_ptr == poison_map) {
+            queue_maps.push(poison_map);
+            break;
         }
-
-            MapProcessor::merge_maps(*(elem.first), *(elem.second));
-            sp_map sp = std::make_shared<std::map<std::string, int>>(*(elem.first));
-            queue_maps.push(sp);
-
+        std::map<std::string, int> elem = *elem_ptr;
+        MapProcessor::merge_maps(res, elem);
     }
+
+    sp_map sp = std::make_shared<std::map<std::string, int>>(res);
+    res_merging.push(sp);
+    res_merging.end_of_data();
 }
 
 int main(int argc, char **argv) {
@@ -116,6 +112,7 @@ int main(int argc, char **argv) {
     tsq_path  queue_path(0, poison_path);
     tsq_string queue_readed_data(0, poison_string);
     tsq_map res_map(4, poison_map);
+    tsq_map res_merging(2, poison_map);
 
     auto t1 = std::thread(worker_reader, std::ref(queue_path), std::ref(queue_readed_data));
 
@@ -124,8 +121,10 @@ int main(int argc, char **argv) {
     auto t5 = std::thread(worker_processor, std::ref(queue_readed_data), std::ref(res_map));
     auto t2 = std::thread(worker_processor, std::ref(queue_readed_data), std::ref(res_map));
 
-    auto t6 = std::thread(worker_merger, std::ref(res_map));
-    auto t7 = std::thread(worker_merger, std::ref(res_map));
+    auto t6 = std::thread(worker_merger, std::ref(res_map), std::ref(res_merging));
+    auto t7 = std::thread(worker_merger, std::ref(res_map), std::ref(res_merging));
+
+    auto t8 = std::thread(worker_merger, std::ref(res_merging), std::ref(res_merging));
 
 
     for (boost::filesystem::directory_entry& entry : boost::filesystem::recursive_directory_iterator("..\\ETEXT02")) {
@@ -134,9 +133,6 @@ int main(int argc, char **argv) {
     }
     queue_path.push(poison_path);
 
-
-
-
     t1.join();
     t2.join();
     t3.join();
@@ -144,15 +140,16 @@ int main(int argc, char **argv) {
     t5.join();
     t6.join();
     t7.join();
+    t8.join();
 
-    std::cout << "F: " << res_map.size() << std::endl;
+    std::cout << "F: " << res_merging.size() << std::endl;
     sp_map final_res;
-    res_map.pop(final_res);
+    res_merging.pop(final_res);
     if (final_res == poison_map) {
-        res_map.pop(final_res);
+        res_merging.pop(final_res);
     }
-    MapProcessor::write_to_file_alphabetic("RESULT_alph.txt", *final_res);
-    MapProcessor::write_to_file_quantity("RESULT_num.txt", *final_res);
+    MapProcessor::write_to_file_alphabetic("1RESULT_alph.txt", *final_res);
+    MapProcessor::write_to_file_quantity("1RESULT_num.txt", *final_res);
     auto finish = get_current_time_fenced();
 
     long long time = to_us(finish-start);
