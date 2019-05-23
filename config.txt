@@ -1,0 +1,7 @@
+num_threads_indexing: 1
+num_threads_reading: 1
+num_threads_processing: 2
+num_threads_merging: 1
+in_file: ../data.zip
+out_file_a: res_alpha.txt
+out_file_n: res_num.txt
