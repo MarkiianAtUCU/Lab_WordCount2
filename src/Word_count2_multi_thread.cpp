@@ -94,6 +94,17 @@ void worker_merger(tsq_map & queue_maps, tsq_map & res_merging) {
     res_merging.end_of_data();
 }
 
+void worker_merger_final(tsq_map & queue_maps, std::map<std::string, int> & res) {
+    for (;;) {
+        sp_map elem_ptr;
+        queue_maps.wait_and_pop(elem_ptr);
+        if (elem_ptr == poison_map) {
+            break;
+        }
+        MapProcessor::merge_maps(res, *elem_ptr);
+    }
+}
+
 int main(int argc, char **argv) {
     auto start = get_current_time_fenced();
     boost::locale::generator gen;
@@ -113,6 +124,7 @@ int main(int argc, char **argv) {
     tsq_string queue_readed_data(0, poison_string);
     tsq_map res_map(4, poison_map);
     tsq_map res_merging(2, poison_map);
+    std::map<std::string, int> final_res;
 
     auto t1 = std::thread(worker_reader, std::ref(queue_path), std::ref(queue_readed_data));
 
@@ -124,7 +136,7 @@ int main(int argc, char **argv) {
     auto t6 = std::thread(worker_merger, std::ref(res_map), std::ref(res_merging));
     auto t7 = std::thread(worker_merger, std::ref(res_map), std::ref(res_merging));
 
-    auto t8 = std::thread(worker_merger, std::ref(res_merging), std::ref(res_merging));
+    auto t8 = std::thread(worker_merger_final, std::ref(res_merging), std::ref(final_res));
 
 
     for (boost::filesystem::directory_entry& entry : boost::filesystem::recursive_directory_iterator("..\\ETEXT02")) {
@@ -143,13 +155,9 @@ int main(int argc, char **argv) {
     t8.join();
 
     std::cout << "F: " << res_merging.size() << std::endl;
-    sp_map final_res;
-    res_merging.pop(final_res);
-    if (final_res == poison_map) {
-        res_merging.pop(final_res);
-    }
-    MapProcessor::write_to_file_alphabetic("1RESULT_alph.txt", *final_res);
-    MapProcessor::write_to_file_quantity("1RESULT_num.txt", *final_res);
+
+    MapProcessor::write_to_file_alphabetic("1RESULT_alph.txt", final_res);
+    MapProcessor::write_to_file_quantity("1RESULT_num.txt", final_res);
     auto finish = get_current_time_fenced();
 
     long long time = to_us(finish-start);
