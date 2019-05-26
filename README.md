@@ -1,5 +1,7 @@
 # Lab_WordCount2
 
+To test our program we used Gutenberg archieve
+
 # Results
 
 |Processing Threads|Merging Threads|Time is seconds|
