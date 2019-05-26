@@ -8,3 +8,5 @@
 | 2                | 4             | 2587          |
 | 1                | 1             | 4245          |
 | 4                | 4             | 1363          |
+
+![](https://github.com/MarkiianAtUCU/Lab_WordCount2/blob/master/plot.png)
