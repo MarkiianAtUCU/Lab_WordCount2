@@ -72,7 +72,7 @@ void worker_processor(tsq_string & strings, tsq_map & queue_res) {
 
     std::cout << "END PROCESS" << std::endl;
     queue_res.end_of_data();
-};
+}
 
 void worker_merger(tsq_map & queue_maps, tsq_map & res_merging) {
     std::map<std::string, int> res;
@@ -106,6 +106,14 @@ void worker_merger_final(tsq_map & queue_maps, std::map<std::string, int> & res)
 }
 
 int main(int argc, char **argv) {
+    if (argc != 2) {
+        try {
+            auto config_object = config("./config.dat");
+        } catch (...) {
+            std::cout << "Incorrect number of arguments:" << std::endl << "./Word_count2_multi_thread <config path>" <<std::endl;
+            exit(1);
+        }
+    }
     auto start = get_current_time_fenced();
     boost::locale::generator gen;
     std::locale loc = gen("");
@@ -113,51 +121,50 @@ int main(int argc, char **argv) {
     std::wcout.imbue(loc);
     std::ios_base::sync_with_stdio(false);
 
-    auto config_object = config("../config.txt");
+    auto config_object = config(argv[1]);
     std::string in_file = config_object.get_string("in_file");
+    in_file.erase(std::remove(in_file.begin(), in_file.end(), '\r'), in_file.end());
     std::string out_file_a = config_object.get_string("out_file_a");
     std::string out_file_n = config_object.get_string("out_file_n");
-//    int num_threads = config_object.get_int("numz_threads");
+
+
+    int reader_num = config_object.get_int("num_threads_processing");
+    int merger_num = config_object.get_int("num_threads_merging");
+    std::vector<std::thread> all_threads;
 
 
     tsq_path  queue_path(0, poison_path);
     tsq_string queue_readed_data(0, poison_string);
-    tsq_map res_map(4, poison_map);
-    tsq_map res_merging(2, poison_map);
+    tsq_map res_map(reader_num, poison_map);
+    tsq_map res_merging(merger_num, poison_map);
     std::map<std::string, int> final_res;
 
-    auto t1 = std::thread(worker_reader, std::ref(queue_path), std::ref(queue_readed_data));
+    all_threads.push_back(std::thread(worker_reader, std::ref(queue_path), std::ref(queue_readed_data)));
 
-    auto t3 = std::thread(worker_processor, std::ref(queue_readed_data), std::ref(res_map));
-    auto t4 = std::thread(worker_processor, std::ref(queue_readed_data), std::ref(res_map));
-    auto t5 = std::thread(worker_processor, std::ref(queue_readed_data), std::ref(res_map));
-    auto t2 = std::thread(worker_processor, std::ref(queue_readed_data), std::ref(res_map));
+    for (int i = 0; i<reader_num ;i++) {
+        all_threads.push_back(std::thread(worker_processor, std::ref(queue_readed_data), std::ref(res_map)));
+    }
 
-    auto t6 = std::thread(worker_merger, std::ref(res_map), std::ref(res_merging));
-    auto t7 = std::thread(worker_merger, std::ref(res_map), std::ref(res_merging));
+    for (int i = 0; i<merger_num ;i++) {
+        all_threads.push_back(std::thread(worker_merger, std::ref(res_map), std::ref(res_merging)));
+    }
 
-    auto t8 = std::thread(worker_merger_final, std::ref(res_merging), std::ref(final_res));
+    all_threads.push_back(std::thread(worker_merger_final, std::ref(res_merging), std::ref(final_res)));
 
 
-    for (boost::filesystem::directory_entry& entry : boost::filesystem::recursive_directory_iterator("..\\ETEXT02")) {
+    for (boost::filesystem::directory_entry& entry : boost::filesystem::recursive_directory_iterator(in_file)) {
         auto sp = std::make_shared<boost::filesystem::path>(entry.path());
         queue_path.push(sp);
     }
     queue_path.push(poison_path);
 
-    t1.join();
-    t2.join();
-    t3.join();
-    t4.join();
-    t5.join();
-    t6.join();
-    t7.join();
-    t8.join();
+    for (auto & elem: all_threads) {
+        elem.join();
+    }
 
-    std::cout << "F: " << res_merging.size() << std::endl;
 
-    MapProcessor::write_to_file_alphabetic("1RESULT_alph.txt", final_res);
-    MapProcessor::write_to_file_quantity("1RESULT_num.txt", final_res);
+    MapProcessor::write_to_file_alphabetic(out_file_a, final_res);
+    MapProcessor::write_to_file_quantity(out_file_n, final_res);
     auto finish = get_current_time_fenced();
 
     long long time = to_us(finish-start);
